@@ -67,7 +67,6 @@ import (
 	"github.com/tikv/client-go/v2/util"
 	"github.com/tikv/client-go/v2/util/redact"
 	pd "github.com/tikv/pd/client"
-	"github.com/tikv/pd/client/opt"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1886,6 +1885,7 @@ func (mu *regionIndexMu) insertRegionToCache(cachedRegion *Region, invalidateOld
 	// and there is the synchronization time between the pd follower and the leader.
 	// So we should check the epoch.
 	if ok && (oldVer.GetVer() > newVer.GetVer() || oldVer.GetConfVer() > newVer.GetConfVer()) {
+		metrics.TiKVStaleRegionFromPDCounter.Inc()
 		logutil.BgLogger().Debug("get stale region",
 			zap.Uint64("region", newVer.GetID()), zap.Uint64("new-ver", newVer.GetVer()), zap.Uint64("new-conf", newVer.GetConfVer()),
 			zap.Uint64("old-ver", oldVer.GetVer()), zap.Uint64("old-conf", oldVer.GetConfVer()))
@@ -2180,7 +2180,7 @@ func (c *RegionCache) scanRegions(bo *retry.Backoffer, startKey, endKey []byte, 
 		ctx = opentracing.ContextWithSpan(ctx, span1)
 	}
 
-	pdOpts := []opt.GetRegionOption{opt.WithAllowFollowerHandle()}
+	pdOpts := []pd.GetRegionOption{pd.WithAllowFollowerHandle()}
 	var backoffErr error
 	for {
 		if backoffErr != nil {
@@ -2259,15 +2259,15 @@ func (c *RegionCache) batchScanRegions(bo *retry.Backoffer, keyRanges []pd.KeyRa
 		op(&batchOpt)
 	}
 	needFollowerHandle := true
-	initPdOpts := func() []opt.GetRegionOption {
-		pdOpts := []opt.GetRegionOption{
-			opt.WithOutputMustContainAllKeyRange(),
+	initPdOpts := func() []pd.GetRegionOption {
+		pdOpts := []pd.GetRegionOption{
+			pd.WithOutputMustContainAllKeyRange(),
 		}
 		if needFollowerHandle {
-			pdOpts = append(pdOpts, opt.WithAllowFollowerHandle())
+			pdOpts = append(pdOpts, pd.WithAllowFollowerHandle())
 		}
 		if batchOpt.needBuckets {
-			pdOpts = append(pdOpts, opt.WithBuckets())
+			pdOpts = append(pdOpts, pd.WithBuckets())
 		}
 		return pdOpts
 	}
